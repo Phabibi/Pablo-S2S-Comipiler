@@ -1,8 +1,6 @@
-import System.Environment
-import System.IO
-import Data.Bits
 
-
+module Pabloparser where
+import PabloTokenize
 {-
 Implementations of a parser for the Pablo Language for the Parabix.
 
@@ -42,37 +40,21 @@ Kernels
 <signature> ::= <parameter_list> "->" <parameter_list>
 <parameter_list> ::= [<parameter_spec> {"," <parameter_spec>} ]
 <parameter_spec> ::= <type> <identifier> | <type> "(" <identifier> {"," <identifier>} ")"
+
+
+SMALL LISP :
+<expression> 	::=	<identifier> | <numeric-atom-expr> | <symbolic-atom-expr> | <list-expr> | <fn-call> | <cond-expr> | <let-expr>
+<identifier> 	::=	<id-name:symbolic atom>
+<numeric-atom-expr> 	::=	<numeric-val:numeric atom>
+<symbolic-atom-expr> 	::=	( quote <symbolic-val:symbolic-atom> )
+<list-expr> 	::=	( quote <list-val:list> )
+<fn-call> 	::=	( <callee:identifier> <arguments:expression+> )
+<cond-expr> 	::=	( cond <clauses:clause+> )
+<clause> 	::=	( <predicate:expression> <result:expression> )
+<let-expr> 	::=	( let ( <local-defs:local-def+> ) <final-expr:expression> )
+<local-def> 	::=	( <local-var:variable> <local-val:expression> )
 -}
 
-
-
-{-Tokenizer-}
-data Token = OR | XOR | AND | NEG | Lparen | Rparen | LangleB
- | RangleB | Lbrak | Rbrak | I Integer | COLCOL | Lbrace | Rbrace | Kernal [Char] | Arrow | Com derving Show
-
-tokenize [] = []
-tokenize (' ':more) = tokenize more  -- ignore white space
-tokenize ('\n':more) = tokenize more  -- ignore white space
-tokenize ('|':more) = OR:(tokenize more)
-tokenize ('^':more) = XOR: (tokenize more)
-tokenize ('&':more) = AND: (tokenize more)
-tokenize ('~':more) = NEG: (tokenize more)
-tokenize ('(':more) = Lparen: (tokenize more)
-tokenize (')':more) = Rparen: (tokenize more)
-tokenize ('[':more) = Lbrak: (tokenize more)
-tokenize (']':more) = Rbrak: (tokenize more)
-tokenize ('{':more) = Lbrace: (tokenize more)
-tokenize ('}':more) = Rbrace: (tokenize more)
-tokenize ('<':more) = LangleB: (tokenize more)
-tokenize ('>':more) = RangleB : (tokenize more)
-tokenize (':':':':more) = ColCol: (tokenize more)
-tokenize ('-':'>':more) = Rbrace: (tokenize more)
-tokenize (',':more) = Com: (tokenize more)
-
-{-----------}
-
-
-{-Parser-}
 
 {-Expression Syntax
 
@@ -85,105 +67,60 @@ tokenize (',':more) = Com: (tokenize more)
 <function-call> ::= <identifier> "(" <expression> {"," <expression>} ")"
 <int> = [1-9][0-9]*
 -}
+
+{-Parser-}
 type Identifier = [Char]
-data pabloExpression = Pabexp 
-parseEXP:: [Token] ->  Maybe(Expression , [Token])
+type INT = Int
+data PabloExpression =Pabint INT |Variable Identifier (Maybe INT) |Literal PabloExpression
+ |FuncCall Identifier [PabloExpression] deriving Show
 
-parseEXP [] = Nothing
-parseEXP s =
-  case parseTerm s of
-    Just (p , rest) -> parseEXTP (p,rest)
-    _ -> Nothing
-parseEXTP (tokens, '|':rest) =
-  case parseTerm rest of
-    Just(pab2 , yet_more) -> parseEXTP (OR pab1 pab2 , yet_more)
+parsePabloEXP (Special s:Lparen:more) = parseFuncCall s [] more
+parsePabloEXP (LangleB:more) = parseLit more
+parsePabloEXP (Special s:Lbrak:more) = parsePabloVar s more
+parsePabloEXP (Special s : more) = Just(Variable s Nothing,more)
+parsePabloEXP (Num n:more) = Just (Pabint n , more)
+
+--TODO : Not really sure about this section
+parsePabloEXP tokens = parseFact tokens
+parseFact (Lparen:tokens) =
+  case parsePrim tokens of
+    Just(e ,Rparen:more)->Just(e , more)
+parseFact (NEG:tokens) =
+  case parsePrim tokens of
+    Just(e ,more)->Just(e , more)
+parseFact tokens =
+  case  parsePrim tokens of
+    Just (e, more) -> Just (e , more)
+
+parsePrim tokens =
+  case parsePabloEXP tokens of
+    Just (r , more) -> Just (r , more)
+    _->Nothing
+
+{----------------------}
+parsePabloVar s tokens =
+  case parsePabloEXP tokens of
+    Just (n , Rbrak:more) -> Just(Variable s (getPabint n) , more)
+    Just (n , more) ->  Just (Variable s Nothing , more)
     _-> Nothing
-parseEXTP (tokens, '^':rest) =
-  case parseTerm rest of
-    Just(pab2 , yet_more) -> parseEXTP (XOR pab1 pab2 , yet_more)
-    _-> Nothing
-parseEXRP (pab1 , rest) = Just (pab1 , rest)
+
+getPabint (Pabint n) = Just n
+
+parseFuncCall s args token =
+  case parsePabloEXP token of
+    Just(e,(Com:yet_more)) -> parseFuncCall s (args++[e]) yet_more
+    Just(e,(Rparen: yet_more)) -> Just (FuncCall s (args++[e]), yet_more)
+    _->Nothing
+
+parseLit token =
+  case parsePabloEXP token of
+    Just (num, RangleB:more) -> Just (Literal num , more)
+    Just (num, more) -> Just (Literal num , more)
+    _->Nothing
+
+parsePab srctxt =
+    case parsePabloEXP (tokenize srctxt) of
+        Just (e, []) -> Just e
+        _ -> Nothing
+
 {--------}
--- data Pablo = INT Integer | IDEN [Char] | OR Pablo Pablo | XOR Pablo Pablo | AND Pablo Pablo
---  |NEG Pablo | Group Pablo | LIT Pablo| LIST Pablo | COM Pablo | Block [Pablo] | EQ Pablo Pablo| IF Pablo
---  | While Pablo | COL Pablo | I Pablo | DCOL Pablo | Arrow Pablo | ParamL [Pablo]
---  | Kernal Pablo deriving Show
-
-
--- parsePablo :: [Char] -> Maybe(Pablo , [Char])
--- Implementations fo parse EXP
---  <expression> ::=  <term> | <expression> "|" <term> | <expression> "^" <term>
---
--- parseEXP [] = Nothing
--- parseEXP s =
---   case parseTerm s of
---     Just (p , rest) -> parseEXTP (p,rest)
---     _ -> Nothing
--- parseEXTP (pab1, '|':rest) =
---   case parseTerm rest of
---     Just(pab2 , yet_more) -> parseEXTP (OR pab1 pab2 , yet_more)
---     _-> Nothing
--- parseEXTP (pab1, '^':rest) =
---   case parseTerm rest of
---     Just(pab2 , yet_more) -> parseEXTP (XOR pab1 pab2 , yet_more)
---     _-> Nothing
--- parseEXRP (pab1 , rest) = Just (pab1 , rest)
---
--- --
--- --
---
--- -- <term> ::=  <factor> | <term> "&" <factor>
--- parseTerm :: [Char] -> Maybe (Pablo , [Char])
--- parseTerm s =
---   case parseFactor s of
---     Just(e, more) -> parseTermEXT(e,more)
---     _->Nothing
---
--- parseTermEXT:: (Pablo , [Char] )-> Maybe (Pablo , [Char])
--- parseTermEXT (p1, '&':rest) =
---   case parseFactor rest of
---     Just (p2, more) -> parseTermEXT(AND p1 p2 , more)
---     _-> Nothing
--- parseTermEXT (p1 , s) = Just (p1 , s)
---
--- --
--- --
--- --
--- -- <factor> ::= <primitive> | "~" <primitive> | "(" <primitive ")"
---
--- parseFactor :: [Char] -> Maybe (Pablo , [Char])
---
--- parseFactor ('~':rest) =
---   case parsePrem rest of
---     Just (p , more) -> Just(NEG p , more)
---     _->Nothing
---
--- parseFactor ('(' : rest) =
---   case parsePrem rest of
---     Just(p , ')':more) -> Just (Group p , more)
---     _->Nothing
---
--- parseFactor s =
---   case parsePrem s of
---     Just (p , more) -> Just (p , more)
---     _-> Nothing
--- --
--- --
--- -- <primitive> ::= <literal> | <variable> | <function-call>
---
--- parsePrem :: [Char] -> Maybe (Pablo, [Char])
---
--- parsePrem s = Just (INT 23 , s)
--- parsePrem s =
---   case parseLit s of
---     Just (p , more) -> Just (p , more)
---     _-> Nothing
---
--- parsePrem s =
---   case parseVar s of
---     Just (p , more ) -> Just (p , more)
---     _->Nothing
---
---   case pareFNC s of
--- parsePrem s =
---     Just (p , more) -> Just (p, more)

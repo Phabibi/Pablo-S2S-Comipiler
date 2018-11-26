@@ -1,8 +1,10 @@
+
+module PabloTokenize where
 import System.Environment
 import System.IO
 import Data.Char
 
-data Token = OR | XOR | AND | NEG | Lparen | Rparen | LangleB
+data Token = Num Int| OR | XOR | AND | NEG | Lparen | Rparen | LangleB
  | RangleB | Lbrak | Rbrak | I Int | COLCOL | Lbrace | Rbrace
  | Kernel | Arrow | Com | BadToken Char | Special [Char] | IF | While | Col deriving Show
 
@@ -29,10 +31,10 @@ tokenize ('k':'e':'r':'n':'e':'l':more) = Kernel:(tokenize more)
 
 --TODO:  ask about this case
 
--- tokenize ('i':(c:more))
---    | isDigit c = let (I n: tokens) = getNumToken (digitToInt c) more
---                    in ((I n): tokens)
---    | otherwise = (Special "i"):(tokenize (c:more))
+tokenize ('i':(c:more))
+   | isDigit c = let (I n: tokens) = getNumTokenI (digitToInt c) more
+                   in ((I n): tokens)
+   | otherwise = (Special "i"):(tokenize (c:more))
 
 tokenize (':':c:more)
    |  c == ':' = getSpecial ("::",more)
@@ -48,11 +50,14 @@ getSpecial ("::",more) = COLCOL: (tokenize more)
 getSpecial ("->",more) = Arrow: (tokenize more)
 getSpecial (specials, more) = (Special specials) : (tokenize more)
 ---
-getNumToken accum [] = [I accum]
+getNumToken accum [] = [Num accum]
 getNumToken accum (c:more)
    | isDigit c  = getNumToken (accum * 10 + (digitToInt c)) more
+   | otherwise  = Num accum : (tokenize (c:more))
+getNumTokenI accum [] = [I accum]
+getNumTokenI accum (c:more)
+   | isDigit c  = getNumTokenI (accum * 10 + (digitToInt c)) more
    | otherwise  = I accum : (tokenize (c:more))
-   
 getAlphaNum pfx (alphanum, s@('i':c:more))
    | isAlphaNum c   = getAlphaNum (pfx ++ alphanum ++ ['i',c]) (span isAlphaNum more)
    | otherwise      = Special (pfx ++ alphanum) : (tokenize s)
