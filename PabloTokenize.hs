@@ -24,32 +24,30 @@ tokenize ('}':more) = Rbrace: (tokenize more)
 tokenize ('<':more) = LangleB: (tokenize more)
 tokenize ('>':more) = RangleB : (tokenize more)
 tokenize (',':more) = Com: (tokenize more)
-tokenize (':':[]) = [Col] --useless but what only gets hit when theres only 1 thing in the array and its just a col
 tokenize ('w':'h':'i':'l':'e':more) = While:(tokenize more)
 tokenize ('i':'f':more) = IF:(tokenize more)
 tokenize ('k':'e':'r':'n':'e':'l':more) = Kernel:(tokenize more)
 
---TODO:  ask about this case
 
 tokenize ('i':(c:more))
    | isDigit c = let (I n: tokens) = getNumTokenI (digitToInt c) more
                    in ((I n): tokens)
    | otherwise = (Special "i"):(tokenize (c:more))
 
-tokenize (':':c:more)
-   |  c == ':' = getSpecial ("::",more)
-   | otherwise = Col: (tokenize (c:more))
 tokenize t@(c:more)
    | isDigit c = getNumToken (digitToInt c) more
    | isAlpha c = getAlphaNum [c] (span isAlphaNum more)
    | otherwise = getSpecial (span (\c -> elem c "+-*/<>=&|!@#$%?:") t)
 
--- the specials , not really sure what todo
 getSpecial ("", (c : more)) = BadToken c : (tokenize more)
 getSpecial ("::",more) = COLCOL: (tokenize more)
+getSpecial (":" , more) = Col: (tokenize more)
 getSpecial ("->",more) = Arrow: (tokenize more)
 getSpecial (specials, more) = (Special specials) : (tokenize more)
 ---
+
+--helpers
+
 getNumToken accum [] = [Num accum]
 getNumToken accum (c:more)
    | isDigit c  = getNumToken (accum * 10 + (digitToInt c)) more

@@ -1,6 +1,6 @@
 
 module Pabloparser where
-import PabloTokenize
+import PabloTokenize as T
 {-
 Implementations of a parser for the Pablo Language for the Parabix.
 
@@ -71,26 +71,31 @@ SMALL LISP :
 {-Parser-}
 type Identifier = [Char]
 type INT = Int
-data PabloExpression =Pabint INT |Variable Identifier (Maybe INT) |Literal PabloExpression
- |FuncCall Identifier [PabloExpression] deriving Show
+data PabloExpression =Pabint INT |Variable Identifier|ElementAt Identifier Int |Literal PabloExpression
+ |FuncCall Identifier [PabloExpression]| Not PabloExpression | Group PabloExpression deriving Show
 
 parsePabloEXP (Special s:Lparen:more) = parseFuncCall s [] more
 parsePabloEXP (LangleB:more) = parseLit more
 parsePabloEXP (Special s:Lbrak:more) = parsePabloVar s more
-parsePabloEXP (Special s : more) = Just(Variable s Nothing,more)
+parsePabloEXP (Special s : more) = Just(Variable s,more)
 parsePabloEXP (Num n:more) = Just (Pabint n , more)
-
 --TODO : Not really sure about this section
-parsePabloEXP tokens = parseFact tokens
+parsePabloEXP tokens = parseFact tokens --NOTE:  this is actually wrong change it when you asked.
+
 parseFact (Lparen:tokens) =
   case parsePrim tokens of
-    Just(e ,Rparen:more)->Just(e , more)
-parseFact (NEG:tokens) =
+    Just(e ,Rparen:more)->Just(Group e , more)
+    _-> Nothing
+
+parseFact (T.NEG:tokens) =
   case parsePrim tokens of
-    Just(e ,more)->Just(e , more)
+    Just(e ,more)->Just(Not e , more)
+    _-> Nothing
+
 parseFact tokens =
   case  parsePrim tokens of
     Just (e, more) -> Just (e , more)
+    _-> Nothing
 
 parsePrim tokens =
   case parsePabloEXP tokens of
@@ -100,11 +105,11 @@ parsePrim tokens =
 {----------------------}
 parsePabloVar s tokens =
   case parsePabloEXP tokens of
-    Just (n , Rbrak:more) -> Just(Variable s (getPabint n) , more)
-    Just (n , more) ->  Just (Variable s Nothing , more)
+    Just (n , Rbrak:more) -> Just( ElementAt  s (getPabint n) , more)
+    Just (n , more) ->  Just (Variable s, more)
     _-> Nothing
 
-getPabint (Pabint n) = Just n
+getPabint (Pabint n) =  n
 
 parseFuncCall s args token =
   case parsePabloEXP token of
