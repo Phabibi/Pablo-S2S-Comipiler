@@ -72,15 +72,39 @@ SMALL LISP :
 type Identifier = [Char]
 type INT = Int
 data PabloExpression =Pabint INT |Variable Identifier|ElementAt Identifier Int |Literal PabloExpression
- |FuncCall Identifier [PabloExpression]| Not PabloExpression | Group PabloExpression deriving Show
+ |FuncCall Identifier [PabloExpression]| Not PabloExpression | Group PabloExpression | And PabloExpression PabloExpression
+ | Or PabloExpression PabloExpression | Xor  PabloExpression PabloExpression deriving Show
 
-parsePabloEXP (Special s:Lparen:more) = parseFuncCall s [] more
-parsePabloEXP (LangleB:more) = parseLit more
-parsePabloEXP (Special s:Lbrak:more) = parsePabloVar s more
-parsePabloEXP (Special s : more) = Just(Variable s,more)
-parsePabloEXP (Num n:more) = Just (Pabint n , more)
---TODO : Not really sure about this section
-parsePabloEXP tokens = parseFact tokens --NOTE:  this is actually wrong change it when you asked.
+-- parsePabloEXP (Special s:Lparen:more) = parseFuncCall s [] more
+-- parsePabloEXP (LangleB:more) = parseLit more
+-- parsePabloEXP (Special s:Lbrak:more) = parsePabloVar s more
+-- parsePabloEXP (Special s : more) = Just(Variable s,more)
+-- parsePabloEXP (Num n:more) = Just (Pabint n , more)
+parsePabloEXP tokens =
+  case parseTerm tokens of
+    Just(p ,  more) ->  extendExpr(p,  more)
+    _-> Nothing
+extendExpr(p1,T.OR:tokens) =
+  case parseTerm tokens of
+    Just(p2 , more) -> extendExpr(Or p1 p2 , more)
+    _->Nothing
+
+extendExpr(p1,T.XOR:tokens) =
+  case parseTerm tokens of
+    Just(p2 , more) -> extendExpr(Xor p1 p2 , more)
+    _->Nothing
+
+extendExpr(p , more) = Just (p , more)
+
+parseTerm tokens =
+  case parseFact tokens of
+    Just(p , more) -> extendTerm(p,more)
+    _-> Nothing
+extendTerm(p , T.AND:tokens) =
+  case parseFact tokens of
+    Just (p2 , more) ->  extendTerm (And p p2, more)
+    _-> Nothing
+extendTerm (p , more) = Just (p , more)
 
 parseFact (Lparen:tokens) =
   case parsePrim tokens of
@@ -97,10 +121,13 @@ parseFact tokens =
     Just (e, more) -> Just (e , more)
     _-> Nothing
 
-parsePrim tokens =
-  case parsePabloEXP tokens of
-    Just (r , more) -> Just (r , more)
-    _->Nothing
+parsePrim (Special s:Lparen:more) = parseFuncCall s [] more
+parsePrim  (LangleB:more) = parseLit more
+parsePrim (Special s:Lbrak:more) = parsePabloVar s more
+parsePrim (Special s : more) = Just(Variable s,more)
+parsePrim (Num n:more) = Just (Pabint n , more)
+parsePrim _ = Nothing
+
 
 {----------------------}
 parsePabloVar s tokens =
@@ -123,9 +150,62 @@ parseLit token =
     Just (num, more) -> Just (Literal num , more)
     _->Nothing
 
-parsePab srctxt =
-    case parsePabloEXP (tokenize srctxt) of
-        Just (e, []) -> Just e
-        _ -> Nothing
 
 {--------}
+{-Parse Statements-}
+-- <block> ::= {<statement>}
+-- <statement> ::= <assignment> | <if> | <while>
+-- <assignment> ::= <variable> "=" <expression>
+-- <if> ::= "if" <expression> ":" <block>
+-- <while> ::= "while" <expression> ":" <block>
+
+
+data PabloStatement = Block [PabloStatement] | If PabloExpression PabloStatement| While PabloExpression PabloStatement
+ | Equality PabloExpression PabloExpression deriving Show
+
+parsePabloBlock tokens =
+  case parsePabloStatement tokens of
+    Just (s , more) -> extendBlock (s , more)
+    _-> Nothing
+
+extendBlock (p , []) = Just (p , [])
+extendBlock (p , tokens) =
+  case parsePabloStatement tokens of
+    Just (p2 , more) -> extendBlock (extBLCK p p2, more)
+    _-> Nothing
+
+extendBlock (p , tokens) = Just (p , tokens)
+
+extBLCK (Block a) b  = Block (a++[b])
+extBLCK a b = Block [a,b]
+
+parsePabloStatement (WHILE:tokens) = parsePabloWhileStatement tokens
+parsePabloStatement (IF:tokens) = parsePabloIfStatement tokens
+parsePabloStatement tokens = parsePabloAssignment tokens
+parsePabloStatement _ = Nothing
+
+parsePabloAssignment tokens =
+  case parsePrim tokens of
+    Just (v , Eq:more) -> case parsePabloEXP more of
+      Just (e, more_t) -> Just (Equality v e , more_t)
+      _->Nothing
+    _-> Nothing
+
+parsePabloWhileStatement tokens =
+  case parsePabloEXP(tokens) of
+    Just(p , Col:more) -> case parsePabloBlock more of
+      Just (p2 ,more_t) -> Just (While p p2 , more_t)
+      _-> Nothing
+    _-> Nothing
+
+parsePabloIfStatement tokens =
+  case parsePabloEXP(tokens) of
+    Just(p , Col:more) -> case parsePabloBlock more of
+      Just (p2 ,more_t) -> Just (If p p2 , more_t)
+      _-> Nothing
+    _-> Nothing
+
+parsePab srctxt =
+  case parsePabloBlock (tokenize srctxt) of
+    Just (e, []) -> Just e
+    _ -> Nothing

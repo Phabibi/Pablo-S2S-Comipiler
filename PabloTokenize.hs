@@ -6,7 +6,7 @@ import Data.Char
 
 data Token = Num Int| OR | XOR | AND | NEG | Lparen | Rparen | LangleB
  | RangleB | Lbrak | Rbrak | I Int | COLCOL | Lbrace | Rbrace
- | Kernel | Arrow | Com | BadToken Char | Special [Char] | IF | While | Col deriving Show
+ | Kernel | Arrow | Com | BadToken Char | Special [Char] | IF | WHILE | Col | Eq deriving Show
 
 tokenize [] = []
 tokenize (' ':more) = tokenize more  -- ignore white space
@@ -24,7 +24,8 @@ tokenize ('}':more) = Rbrace: (tokenize more)
 tokenize ('<':more) = LangleB: (tokenize more)
 tokenize ('>':more) = RangleB : (tokenize more)
 tokenize (',':more) = Com: (tokenize more)
-tokenize ('w':'h':'i':'l':'e':more) = While:(tokenize more)
+tokenize ('=':more) = Eq: (tokenize more)
+tokenize ('w':'h':'i':'l':'e':more) = WHILE :(tokenize more)
 tokenize ('i':'f':more) = IF:(tokenize more)
 tokenize ('k':'e':'r':'n':'e':'l':more) = Kernel:(tokenize more)
 
