@@ -80,6 +80,7 @@ data PabloExpression =Pabint INT |Variable Identifier|ElementAt Identifier Int |
 -- parsePabloEXP (Special s:Lbrak:more) = parsePabloVar s more
 -- parsePabloEXP (Special s : more) = Just(Variable s,more)
 -- parsePabloEXP (Num n:more) = Just (Pabint n , more)
+
 parsePabloEXP tokens =
   case parseTerm tokens of
     Just(p ,  more) ->  extendExpr(p,  more)
@@ -182,7 +183,6 @@ extBLCK a b = Block [a,b]
 parsePabloStatement (WHILE:tokens) = parsePabloWhileStatement tokens
 parsePabloStatement (IF:tokens) = parsePabloIfStatement tokens
 parsePabloStatement tokens = parsePabloAssignment tokens
-parsePabloStatement _ = Nothing
 
 parsePabloAssignment tokens =
   case parsePrim tokens of
@@ -205,7 +205,40 @@ parsePabloIfStatement tokens =
       _-> Nothing
     _-> Nothing
 
+-- TYPES
+--
+-- <TYPE> ::= <INTEGER-TYPE> | <STREAM-TYPE> | <STREAM-SET-TYPE>
+-- <INTEGER-TYPE> ::= "I" <INT>
+-- <STREAM_TYPE> ::= "<" <INTEGER-TYPE> ">"
+-- <STREAM_SET-TYPE> ::= <STREAM_TYPE> "[" <INTEGER> "]"
+
+data PabloType = IntType INT | StreaMtype PabloType | StreaMSet PabloType PabloExpression deriving Show
+
+
+parsePabloType (LangleB:more) = parsePabloStreaMtype (more)
+parsePabloType (I n: more) = parseIntType (I n : more)
+parsePabloType _ = Nothing
+
+parsePabloStreaMtype (I n:tokens) =
+  case parseIntType (I n:tokens) of
+    Just (p , RangleB:Lbrak:Num n:more) -> case parsePrim (Num n:more) of
+      Just (n1 ,Rbrak:more_t) -> Just (StreaMSet p n1 , more_t)
+      _-> Nothing
+    Just (p , RangleB:more) -> Just (StreaMtype p , more)
+    _-> Nothing
+parsePabloStreaMtype _ = Nothing
+
+parseIntType (I n:tokens) = Just (IntType n, tokens)
+
+-- Kernels
+--
+-- <kernel> ::= "kernel" <identifier> "::" <signature> "{" block "}"
+-- <signature> ::= <parameter_list> "->" <parameter_list>
+-- <parameter_list> ::= [<parameter_spec> {"," <parameter_spec>} ]
+-- <parameter_spec> ::= <type> <identifier> | <type> "(" <identifier> {"," <identifier>} ")
+
+
 parsePab srctxt =
-  case parsePabloBlock (tokenize srctxt) of
+  case parsePabloType (tokenize srctxt) of
     Just (e, []) -> Just e
     _ -> Nothing
