@@ -41,21 +41,6 @@ Kernels
 <parameter_list> ::= [<parameter_spec> {"," <parameter_spec>} ]
 <parameter_spec> ::= <type> <identifier> | <type> "(" <identifier> {"," <identifier>} ")"
 
-
-SMALL LISP :
-<expression> 	::=	<identifier> | <numeric-atom-expr> | <symbolic-atom-expr> | <list-expr> | <fn-call> | <cond-expr> | <let-expr>
-<identifier> 	::=	<id-name:symbolic atom>
-<numeric-atom-expr> 	::=	<numeric-val:numeric atom>
-<symbolic-atom-expr> 	::=	( quote <symbolic-val:symbolic-atom> )
-<list-expr> 	::=	( quote <list-val:list> )
-<fn-call> 	::=	( <callee:identifier> <arguments:expression+> )
-<cond-expr> 	::=	( cond <clauses:clause+> )
-<clause> 	::=	( <predicate:expression> <result:expression> )
-<let-expr> 	::=	( let ( <local-defs:local-def+> ) <final-expr:expression> )
-<local-def> 	::=	( <local-var:variable> <local-val:expression> )
--}
-
-
 {-Expression Syntax
 
 <expression> ::=  <term> | <expression> "|" <term> | <expression> "^" <term>
@@ -67,6 +52,7 @@ SMALL LISP :
 <function-call> ::= <identifier> "(" <expression> {"," <expression>} ")"
 <int> = [1-9][0-9]*
 -}
+-}
 
 {-Parser-}
 type Identifier = [Char]
@@ -74,12 +60,6 @@ type INT = Int
 data PabloExpression =Pabint INT |Variable Identifier|ElementAt Identifier Int |Literal PabloExpression
  |FuncCall Identifier [PabloExpression]| Not PabloExpression | Group PabloExpression | And PabloExpression PabloExpression
  | Or PabloExpression PabloExpression | Xor  PabloExpression PabloExpression deriving Show
-
--- parsePabloEXP (Special s:Lparen:more) = parseFuncCall s [] more
--- parsePabloEXP (LangleB:more) = parseLit more
--- parsePabloEXP (Special s:Lbrak:more) = parsePabloVar s more
--- parsePabloEXP (Special s : more) = Just(Variable s,more)
--- parsePabloEXP (Num n:more) = Just (Pabint n , more)
 
 parsePabloEXP tokens =
   case parseTerm tokens of
@@ -127,10 +107,7 @@ parsePrim  (LangleB:more) = parseLit more
 parsePrim (Special s:Lbrak:more) = parsePabloVar s more
 parsePrim (Special s : more) = Just(Variable s,more)
 parsePrim (Num n:more) = Just (Pabint n , more)
-parsePrim _ = Nothing
-
-
-{----------------------}
+parsePrim _ =Nothing
 parsePabloVar s tokens =
   case parsePabloEXP tokens of
     Just (n , Rbrak:more) -> Just( ElementAt  s (getPabint n) , more)
@@ -151,8 +128,8 @@ parseLit token =
     Just (num, more) -> Just (Literal num , more)
     _->Nothing
 
-
 {--------}
+
 {-Parse Statements-}
 -- <block> ::= {<statement>}
 -- <statement> ::= <assignment> | <if> | <while>
@@ -174,9 +151,6 @@ extendBlock (p , tokens) =
   case parsePabloStatement tokens of
     Just (p2 , more) -> extendBlock (extBLCK p p2, more)
     _-> Nothing
-
-extendBlock (p , tokens) = Just (p , tokens)
-
 extBLCK (Block a) b  = Block (a++[b])
 extBLCK a b = Block [a,b]
 
@@ -186,7 +160,7 @@ parsePabloStatement tokens = parsePabloAssignment tokens
 
 parsePabloAssignment tokens =
   case parsePrim tokens of
-    Just (v , Eq:more) -> case parsePabloEXP more of
+    Just (v , Eq:more) -> case parsePabloEXP  more of
       Just (e, more_t) -> Just (Equality v e , more_t)
       _->Nothing
     _-> Nothing
@@ -205,6 +179,8 @@ parsePabloIfStatement tokens =
       _-> Nothing
     _-> Nothing
 
+{-----------------}
+
 -- TYPES
 --
 -- <TYPE> ::= <INTEGER-TYPE> | <STREAM-TYPE> | <STREAM-SET-TYPE>
@@ -214,21 +190,22 @@ parsePabloIfStatement tokens =
 
 data PabloType = IntType INT | StreaMtype PabloType | StreaMSet PabloType PabloExpression deriving Show
 
-
 parsePabloType (LangleB:more) = parsePabloStreaMtype (more)
 parsePabloType (I n: more) = parseIntType (I n : more)
 parsePabloType _ = Nothing
 
-parsePabloStreaMtype (I n:tokens) =
-  case parseIntType (I n:tokens) of
+parsePabloStreaMtype tokens =
+  case parseIntType tokens of
     Just (p , RangleB:Lbrak:Num n:more) -> case parsePrim (Num n:more) of
       Just (n1 ,Rbrak:more_t) -> Just (StreaMSet p n1 , more_t)
       _-> Nothing
     Just (p , RangleB:more) -> Just (StreaMtype p , more)
     _-> Nothing
-parsePabloStreaMtype _ = Nothing
 
 parseIntType (I n:tokens) = Just (IntType n, tokens)
+parseIntType _= Nothing
+
+{--------------}
 
 -- Kernels
 --
@@ -236,9 +213,50 @@ parseIntType (I n:tokens) = Just (IntType n, tokens)
 -- <signature> ::= <parameter_list> "->" <parameter_list>
 -- <parameter_list> ::= [<parameter_spec> {"," <parameter_spec>} ]
 -- <parameter_spec> ::= <type> <identifier> | <type> "(" <identifier> {"," <identifier>} ")
+data PabloKernel = PKernel Identifier PabloKernel PabloStatement | Signature2 PabloKernel PabloKernel | Signature1 PabloKernel
+ | ParamL PabloKernel [PabloKernel] | ParamSpec PabloType Identifier | ParamSpecL PabloType Identifier [Identifier] deriving Show
 
+parsePabloKernel (Kernel:Special s:COLCOL:tokens) =
+  case parsePabloSignature tokens of
+    Just (ps , Lbrace:more) -> case parsePabloBlock (init more) of
+      Just (pb , more) -> Just (PKernel s ps pb , more)
+      _->Nothing
+    _->Nothing
+
+parsePabloSignature tokens =
+  case parsePabloParamL tokens of
+    Just(pl , Arrow:more) -> case parsePabloParamL more of
+      Just(pl2 , more) -> Just(Signature2 pl pl2 , more)
+      _-> Nothing
+    Just(pl , more) -> Just(Signature1 pl, more )
+    _ -> Nothing
+parsePabloParamL tokens =
+  case parsePabloParamSpec tokens of
+    Just (sp ,Com:more) -> extendParamL sp [] more
+    Just (sp , more) -> Just(ParamL sp [] , more)
+    _-> Nothing
+extendParamL sp pabk tokens =
+  case parsePabloParamSpec(tokens) of
+    Just (sp2 , Com:more_t) -> extendParamL sp (pabk++[sp2]) more_t
+    Just (sp2, more_t) -> Just(ParamL sp (pabk++[sp2]), more_t )
+    _->Nothing
+
+parsePabloParamSpec tokens =
+  case parsePabloType tokens of
+    Just (p, Special s:Lparen:more) -> spechelper p s [] more
+    Just (p , Special s:more) -> Just (ParamSpec p s, more)
+    _-> Nothing
+spechelper p s args more =
+  case parsePrim more of
+    Just (e ,(Com:yet_more)) -> spechelper p s (args++[paramIdent(e)]) yet_more
+    Just (e , (Rparen: yet_more)) -> Just(ParamSpecL p s (args++[paramIdent(e)]) , yet_more)
+    _ -> Nothing
+
+paramIdent (Variable s) = s
+
+-- Finally...
 
 parsePab srctxt =
-  case parsePabloType (tokenize srctxt) of
-    Just (e, []) -> Just e
+  case parsePabloKernel (tokenize srctxt) of
+    Just (e,[]) -> Just e
     _ -> Nothing
