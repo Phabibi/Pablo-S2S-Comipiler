@@ -57,6 +57,7 @@ Kernels
 
 {-Parser-}
 type Identifier = [Char]
+
 type INT = Int
 data PabloExpression =Pabint INT |Variable Identifier|ElementAt Identifier Int |Literal PabloExpression
  |FuncCall Identifier [PabloExpression]| Not PabloExpression | Group PabloExpression | And PabloExpression PabloExpression
@@ -263,18 +264,21 @@ parsePab srctxt =
     _ -> Nothing
  --
 showparamSpec (ParamSpec _ id) =  [id]
-showparamSpec (ParamSpecL _ id ids) = [id] ++ ids
+showparamSpec (ParamSpecL _ id ids) = [id]++ ids
 showparamList (ParamL pspec []) = showparamSpec(pspec)
 showparamList (ParamL pspec [moreps]) = showparamSpec(pspec) ++ showparamSpec(moreps)
 showSignature2 (Signature2 p1 p2) = showparamList(p1) ++ showparamList(p2)
 showSignature2 (Signature1 param1) = showparamList(param1)
 
-convert s = showSignature2(s)
 showKernelHeader(PKernel id params _)  =
  "class " ++ (id) ++ "Kernel final: public pablo::PabloKernel {\n"
  ++ "public:\n" ++"    " ++ (id) ++
  "Kernel(const std::unique_ptr<kernel::KernelBuilder> & b,\n"
- ++"  bool isCachable() const override { return true; } \n"
+ ++ intercalate (",\n") (fmap (map (\x -> "StreamSet*  "++ show x  )) showSignature2(params)) ++ ");\n"
+ ++ " bool isCachable() const override { return true; } \n"
  ++ " bool hasSignature() const override {return false;}\n"
  ++ " void generatePabloMethod() override;\n"
  ++ "};"
+
+justconvert (Just e) = e
+showHead srctext = showKernelHeader(justconvert(parsePab(srctext)))
