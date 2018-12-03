@@ -1,6 +1,7 @@
 
 module Pabloparser where
 import PabloTokenize as T
+import Data.List
 {-
 Implementations of a parser for the Pablo Language for the Parabix.
 
@@ -260,3 +261,20 @@ parsePab srctxt =
   case parsePabloKernel (tokenize srctxt) of
     Just (e,[]) -> Just e
     _ -> Nothing
+ --
+showparamSpec (ParamSpec _ id) =  [id]
+showparamSpec (ParamSpecL _ id ids) = [id] ++ ids
+showparamList (ParamL pspec []) = showparamSpec(pspec)
+showparamList (ParamL pspec [moreps]) = showparamSpec(pspec) ++ showparamSpec(moreps)
+showSignature2 (Signature2 p1 p2) = showparamList(p1) ++ showparamList(p2)
+showSignature2 (Signature1 param1) = showparamList(param1)
+
+convert s = showSignature2(s)
+showKernelHeader(PKernel id params _)  =
+ "class " ++ (id) ++ "Kernel final: public pablo::PabloKernel {\n"
+ ++ "public:\n" ++"    " ++ (id) ++
+ "Kernel(const std::unique_ptr<kernel::KernelBuilder> & b,\n"
+ ++"  bool isCachable() const override { return true; } \n"
+ ++ " bool hasSignature() const override {return false;}\n"
+ ++ " void generatePabloMethod() override;\n"
+ ++ "};"
