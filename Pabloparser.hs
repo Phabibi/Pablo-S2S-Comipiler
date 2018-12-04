@@ -274,11 +274,15 @@ showKernelHeader(PKernel id params _)  =
  "class " ++ (id) ++ "Kernel final: public pablo::PabloKernel {\n"
  ++ "public:\n" ++"    " ++ (id) ++
  "Kernel(const std::unique_ptr<kernel::KernelBuilder> & b,\n"
- ++ intercalate (",\n") (fmap (map (\x -> "StreamSet*  "++ show x  )) showSignature2(params)) ++ ");\n"
+ ++ intercalate (",\n") (fmap (map (\x -> "StreamSet*  "++  x  )) showSignature2(params)) ++ ");\n"
  ++ " bool isCachable() const override { return true; } \n"
  ++ " bool hasSignature() const override {return false;}\n"
  ++ " void generatePabloMethod() override;\n"
- ++ "};"
+ ++ "};\n"
+ ++ (id)++"Kernel::"++(id)++"Kernel(const std::unique_ptr<kernel::KernelBuilder> & b ,"
+ ++ intercalate (",") (fmap (map (\x -> "StreamSet*  "++  x  )) showSignature2(params)) ++ "):PabloKernel(b,"++ (id) ++ ",\n"
+ ++  intercalate (",\n") (fmap (map (\x -> "{Binding{"++  show x ++ "," ++ x ++ "}}"  )) showSignature2(params)) ++ "){\n}"
+
 
 justconvert (Just e) = e
-showHead srctext = showKernelHeader(justconvert(parsePab(srctext)))
+showHead srctext = putStrLn (showKernelHeader(justconvert(parsePab(srctext))))
