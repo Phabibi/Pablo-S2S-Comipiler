@@ -139,31 +139,29 @@ parseLit token =
 -- <if> ::= "if" <expression> ":" <block>
 -- <while> ::= "while" <expression> ":" <block>
 
-
-data PabloStatement = Block [PabloStatement] | If PabloExpression PabloStatement| While PabloExpression PabloStatement
+type Block = [PabloStatement]
+data PabloStatement = If PabloExpression [PabloStatement]| While PabloExpression [PabloStatement]
  | Equality PabloExpression PabloExpression deriving Show
 
 parsePabloBlock tokens =
   case parsePabloStatement tokens of
-    Just (s , more) -> extendBlock (s , more)
+    Just (s , more) -> extendBlock ([s] , more)
     _-> Nothing
 
 extendBlock (p , []) = Just (p , [])
 extendBlock (p , tokens) =
   case parsePabloStatement tokens of
-    Just (p2 , more) -> extendBlock (extBLCK p p2, more)
+    Just (p2 , more) -> extendBlock ( p ++ [p2] , more)
     _-> Nothing
-extBLCK (Block a) b  = Block (a++[b])
-extBLCK a b = Block [a,b]
 
 parsePabloStatement (WHILE:tokens) = parsePabloWhileStatement tokens
 parsePabloStatement (IF:tokens) = parsePabloIfStatement tokens
 parsePabloStatement tokens = parsePabloAssignment tokens
 
 parsePabloAssignment tokens =
-  case parsePrim tokens of
-    Just (v , Eq:more) -> case parsePabloEXP  more of
-      Just (e, more_t) -> Just (Equality v e , more_t)
+  case parsePabloEXP tokens of
+    Just (Variable v , Eq:more) -> case parsePabloEXP  more of
+      Just (e, more_t) -> Just (Equality (Variable v) e , more_t)
       _->Nothing
     _-> Nothing
 
@@ -215,7 +213,7 @@ parseIntType _= Nothing
 -- <signature> ::= <parameter_list> "->" <parameter_list>
 -- <parameter_list> ::= [<parameter_spec> {"," <parameter_spec>} ]
 -- <parameter_spec> ::= <type> <identifier> | <type> "(" <identifier> {"," <identifier>} ")
-data PabloKernel = PKernel Identifier PabloKernel PabloStatement | Signature2 PabloKernel PabloKernel | Signature1 PabloKernel
+data PabloKernel = PKernel Identifier PabloKernel [PabloStatement] | Signature2 PabloKernel PabloKernel | Signature1 PabloKernel
  | ParamL PabloKernel [PabloKernel] | ParamSpec PabloType Identifier | ParamSpecL PabloType Identifier [Identifier] deriving Show
 
 parsePabloKernel (Kernel:Special s:COLCOL:tokens) =
@@ -270,18 +268,69 @@ showparamList (ParamL pspec [moreps]) = showparamSpec(pspec) ++ showparamSpec(mo
 showSignature2 (Signature2 p1 p2) = showparamList(p1) ++ showparamList(p2)
 showSignature2 (Signature1 param1) = showparamList(param1)
 
-showKernelHeader(PKernel id params _)  =
- "class " ++ (id) ++ "Kernel final: public pablo::PabloKernel {\n"
- ++ "public:\n" ++"    " ++ (id) ++
- "Kernel(const std::unique_ptr<kernel::KernelBuilder> & b,\n"
- ++ intercalate (",\n") (fmap (map (\x -> "StreamSet*  "++  x  )) showSignature2(params)) ++ ");\n"
- ++ " bool isCachable() const override { return true; } \n"
- ++ " bool hasSignature() const override {return false;}\n"
- ++ " void generatePabloMethod() override;\n"
- ++ "};\n"
- ++ (id)++"Kernel::"++(id)++"Kernel(const std::unique_ptr<kernel::KernelBuilder> & b ,"
- ++ intercalate (",") (fmap (map (\x -> "StreamSet*  "++  x  )) showSignature2(params)) ++ "):PabloKernel(b,"++ (id) ++ ",\n"
- ++  intercalate (",\n") (fmap (map (\x -> "{Binding{"++  show x ++ "," ++ x ++ "}}"  )) showSignature2(params)) ++ "){\n}"
+showKernelHeader(PKernel id params more)  =
+ -- "class " ++ (id) ++ "Kernel final: public pablo::PabloKernel {\n"
+ -- ++ "public:\n" ++"    " ++ (id) ++
+ -- "Kernel(const std::unique_ptr<kernel::KernelBuilder> & b,\n"
+ -- ++ intercalate (",\n") (fmap (map (\x -> "StreamSet*  "++  x  )) showSignature2(params)) ++ ");\n"
+ -- ++ " bool isCachable() const override { return true; } \n"
+ -- ++ " bool hasSignature() const override {return false;}\n"
+ -- ++ " void generatePabloMethod() override;\n"
+ -- ++ "};\n"
+ -- ++ (id)++"Kernel::"++(id)++"Kernel(const std::unique_ptr<kernel::KernelBuilder> & b ,"
+ -- ++ intercalate (",") (fmap (map (\x -> "StreamSet*  "++  x  )) showSignature2(params)) ++ "):PabloKernel(b,"++ (id) ++ ",\n"
+ -- ++  intercalate (",\n") (fmap (map (\x -> "{Binding{"++  show x ++ "," ++ x ++ "}}"  )) showSignature2(params)) ++ "){\n}"
+ printStatements(more , "main")
+-- printStatements :: ([PabloStatement],[Char]) -> [Char]
+-- getexp (Variable a) = a
+-- getexp (Pabint x) =  show x
+-- getexp (Not x) = getexp x
+-- getexp (Or a b) = getexp a
+
+
+makeEx ((Pabint x),scope) = scope++"."++"getInteger("++ show x++ "),"
+makeEX ((Variable a), scope) = a
+makeEX ((ElementAt x y),scope) = x ++ scope++"."++"createExtract("++show x++","++show y++")"
+makeEX ((Not x),scope )= scope++"."++"createNot("++makeEX (x , scope) ++ ") "
+makeEX ((And x y),scope) = scope++"."++"createAnd("++makeEX (x , scope) ++ "," ++ makeEX (y , scope) ++ ")"
+makeEX ((Or x y),scope) = scope++"."++"createOr("++ makeEX(x , scope) ++ ","++ makeEX(y,scope) ++")"
+makeEX ((Xor x y),scope) = scope++"."++"createXor("++makeEX(x, scope) ++ "," ++ makeEX(y , scope )++")"
+
+-- not sure what todo for these
+-- makeEX ((FuncCall x y),scope )= scope++"."++"createFunctionCall("++makeEX (x , scope) ++ "," makeEX(y, scope) ++  ") "
+-- makeEXPr (Group x) scope = x
+
+printStatements ([], currentScope) = []
+
+printStatements((While expr [nestedBlock]):more,  currentScope) =
+  "{\n" ++       -- open C++ scope
+  "auto " ++ newScope ++ " = " ++  currentScope ++ ".createScope();\n"++
+  currentScope ++ ".createIf(" ++ (show expr) ++ "," ++ newScope ++ ");\n" ++
+  printStatements([nestedBlock], newScope) ++
+  "}\n" ++     -- close C++ scop
+  printStatements (more, currentScope)
+  where newScope = "newScope" ++ (show $ length more)
+
+printStatements((If expr [nestedBlock]):more,  currentScope) =
+  "{\n" ++       -- open C++ scope
+  "auto " ++ newScope ++ " = " ++  currentScope ++ ".createScope();\n"++
+  currentScope ++ ".createWhile(" ++ (show expr) ++ "," ++ newScope ++ ");\n" ++
+  printStatements([nestedBlock], newScope) ++
+  "}\n" ++     -- close C++ scop
+  printStatements (more, currentScope)
+  where newScope = "newScope" ++ (show $ length more)
+
+printStatements ((Equality (Variable a) b):more, currentScope) =
+  "{\n" ++       -- open C++ scope
+  "auto " ++ a ++ " = " ++  currentScope ++ ".createVar(" ++ show a ++ ");\n"++
+  currentScope ++ ".createAssign( "
+  ++ a
+  ++ "," ++ makeEX(b , currentScope)
+  ++ ");\n}\n"      -- close C++ scopprintStatements (more, currentScope)
+  where newScope = "newScope" ++ (show $ length more)
+
+
+
 
 
 justconvert (Just e) = e
