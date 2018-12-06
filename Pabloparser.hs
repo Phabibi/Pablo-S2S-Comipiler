@@ -2,6 +2,7 @@
 module Pabloparser where
 import PabloTokenize as T
 import Data.List
+import Data.Char
 {-
 Implementations of a parser for the Pablo Language for the Parabix.
 
@@ -268,19 +269,39 @@ showparamList (ParamL pspec [moreps]) = showparamSpec(pspec) ++ showparamSpec(mo
 showSignature2 (Signature2 p1 p2) = showparamList(p1) ++ showparamList(p2)
 showSignature2 (Signature1 param1) = showparamList(param1)
 
+getfirstnum (input:output:rest)  = (getint 0 output)
+getfirst (input:output) = input
+getsecond (input:output:rest) = output
+getsecondAST (kid:input:(output)) = "PabloAST* u" ++ show (getint 0 input) ++ "bits[" ++ show  (getint 0 input) ++ "];\n"
+getrestASt (kid:input:(output)) = intercalate (";\n") (map (\x -> "PabloAST*  "++  x  )  output )
+
+
+getint accum [] = accum
+getint accum (c:more)
+   | isDigit c  = getint (accum * 10 + (digitToInt c)) more
+   | otherwise  = getint accum more
+
 showKernelHeader(PKernel id params more)  =
- -- "class " ++ (id) ++ "Kernel final: public pablo::PabloKernel {\n"
- -- ++ "public:\n" ++"    " ++ (id) ++
- -- "Kernel(const std::unique_ptr<kernel::KernelBuilder> & b,\n"
- -- ++ intercalate (",\n") (fmap (map (\x -> "StreamSet*  "++  x  )) showSignature2(params)) ++ ");\n"
- -- ++ " bool isCachable() const override { return true; } \n"
- -- ++ " bool hasSignature() const override {return false;}\n"
- -- ++ " void generatePabloMethod() override;\n"
- -- ++ "};\n"
- -- ++ (id)++"Kernel::"++(id)++"Kernel(const std::unique_ptr<kernel::KernelBuilder> & b ,"
- -- ++ intercalate (",") (fmap (map (\x -> "StreamSet*  "++  x  )) showSignature2(params)) ++ "):PabloKernel(b,"++ (id) ++ ",\n"
- -- ++  intercalate (",\n") (fmap (map (\x -> "{Binding{"++  show x ++ "," ++ x ++ "}}"  )) showSignature2(params)) ++ "){\n}"
- printStatements(more , "main")
+ "class " ++ (id) ++ "Kernel final: public pablo::PabloKernel {\n"
+ ++ "public:\n" ++"    " ++ (id) ++
+ "Kernel(const std::unique_ptr<kernel::KernelBuilder> & b,\n"
+ ++ intercalate (",\n") (fmap (map (\x -> "StreamSet*  "++  x  )) showSignature2(params)) ++ ");\n"
+ ++ " bool isCachable() const override { return true; } \n"
+ ++ " bool hasSignature() const override {return false;}\n"
+ ++ " void generatePabloMethod() override;\n"
+ ++ "};\n"
+ ++ (id)++"Kernel::"++(id)++"Kernel(const std::unique_ptr<kernel::KernelBuilder> & b ,"
+ ++ intercalate (",") (fmap (map (\x -> "StreamSet*  "++  x  )) showSignature2(params)) ++ "):PabloKernel(b,"++ (id) ++ ",\n"
+ ++  intercalate (",\n") (fmap (map (\x -> "{Binding{"++  show x ++ "," ++ x ++ "}}"  )) showSignature2(params)) ++ "){\n}"
+ ++ "Void" ++ id ++ "Kernel::generatePabloMethod(){\n"
+ ++ "PabloBuilder main(getEntryScope());\n"
+ ++ "std::vector <PabloAST *>" ++  getfirst(showSignature2(params)) ++ " = getinputStreamSet(" ++ show  (getfirst(showSignature2(params))) ++");\n\n"
+ ++ getsecondAST(showSignature2(params)) ++ getrestASt(showSignature2(params))
+ ++ "TranslateBlock("++printStatements(more , "main") ++ ",main)\n"
+ -- ++ "for (unsigned i = 0 ; i < " ++ getfirstnum(showSignature2(params))
+ -- ++ ";i++) {\n pb.createAssign(pb.createExtract(getOutputStreamVar(" ++ show ("u" ++ show getfirstnum(showSignature2(params)) ++ "bits),")
+ -- ++ "pb.getInteger(i)), " ++ "u" ++ show getfirstnum(showSignature2(params)) ++ "bits[" ++ show  getfirstnum(showSignature2(params)) ++ ");\n}"
+ -- ++"}"
 -- printStatements :: ([PabloStatement],[Char]) -> [Char]
 -- getexp (Variable a) = a
 -- getexp (Pabint x) =  show x
@@ -298,27 +319,26 @@ makeEX ((Xor x y),scope) = scope++"."++"createXor("++makeEX(x, scope) ++ "," ++ 
 
 -- not sure what todo for these
 -- makeEX ((FuncCall x y),scope )= scope++"."++"createFunctionCall("++makeEX (x , scope) ++ "," makeEX(y, scope) ++  ") "
--- makeEXPr (Group x) scope = x
-
+-- makeEX (Group x) scope = x
+-- makeEX ((Literal d))
 printStatements ([], currentScope) = []
-
-printStatements((While expr [nestedBlock]):more,  currentScope) =
+printStatements((If expr nestedBlock):more,  currentScope) =
   "{\n" ++       -- open C++ scope
   "auto " ++ newScope ++ " = " ++  currentScope ++ ".createScope();\n"++
-  currentScope ++ ".createIf(" ++ (show expr) ++ "," ++ newScope ++ ");\n" ++
-  printStatements([nestedBlock], newScope) ++
+  currentScope ++ ".createif(" ++ (show expr) ++ "," ++ newScope ++ ");\n" ++
+  printStatements(nestedBlock, newScope) ++
   "}\n" ++     -- close C++ scop
   printStatements (more, currentScope)
-  where newScope = "newScope" ++ (show $ length more)
+  where newScope = "newScope" ++ (show (length nestedBlock))
 
-printStatements((If expr [nestedBlock]):more,  currentScope) =
+printStatements((While expr nestedBlock):more,  currentScope) =
   "{\n" ++       -- open C++ scope
   "auto " ++ newScope ++ " = " ++  currentScope ++ ".createScope();\n"++
   currentScope ++ ".createWhile(" ++ (show expr) ++ "," ++ newScope ++ ");\n" ++
-  printStatements([nestedBlock], newScope) ++
+  printStatements(nestedBlock,  currentScope) ++
   "}\n" ++     -- close C++ scop
   printStatements (more, currentScope)
-  where newScope = "newScope" ++ (show $ length more)
+  where newScope = "newScope" ++ ( show  (length  nestedBlock ))
 
 printStatements ((Equality (Variable a) b):more, currentScope) =
   "{\n" ++       -- open C++ scope
@@ -327,7 +347,8 @@ printStatements ((Equality (Variable a) b):more, currentScope) =
   ++ a
   ++ "," ++ makeEX(b , currentScope)
   ++ ");\n}\n"      -- close C++ scopprintStatements (more, currentScope)
-  where newScope = "newScope" ++ (show $ length more)
+  ++ printStatements (more, currentScope)
+  -- where newScope = "newScope" ++ (show (length more ))
 
 
 
