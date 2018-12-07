@@ -267,21 +267,21 @@ showparamSpec (ParamSpec _ id) =  [id]
 showparamSpec (ParamSpecL _ id ids) = [id]++ ids
 showparamList (ParamL pspec []) = showparamSpec(pspec)
 showparamList (ParamL pspec [moreps]) = showparamSpec(pspec) ++ showparamSpec(moreps)
-showSignature2 (Signature2 p1 p2) = showparamList(p1) ++ showparamList(p2)
-showSignature2 (Signature1 param1) = showparamList(param1)
+showSignature2Input (Signature2 p1 _) = showparamList(p1)
+showSignature2Output (Signature2 _ p2) = showparamList(p2)
+showSignature2 (Signature2 p1 p2) = showparamList(p1) ++  showparamList(p2)
 
 
 extractparamtype (IntType a) = []
 extractparamspec (ParamSpec (IntType a) _ ) = []   -- we dont need these yet
 extractparamspec (ParamSpec (StreaMtype a) _ ) = extractparamtype(a)
-
 extractparamspec (ParamSpec (StreaMSet _ b) _) = showpab(b)
-
 extractparamlist (ParamL a []) = extractparamspec (a) : []
 extractparamlist (ParamL a (s:rest))= [extractparamspec (a)] ++ extractparamlist(ParamL s  rest)
-
 extractSignatureInput (Signature2 p1 _) = extractparamlist(p1)
 extractSignatureOutput (Signature2 _ p2) = extractparamlist(p2)
+
+
 
 showKernelHeader(PKernel id params more)  =
  "class " ++ (id) ++ "Kernel final: public pablo::PabloKernel {\n"
@@ -294,16 +294,18 @@ showKernelHeader(PKernel id params more)  =
  ++ "};\n"
  ++ (id)++"Kernel::"++(id)++"Kernel(const std::unique_ptr<kernel::KernelBuilder> & b ,"
 
- ++  intercalate (",\n") (fmap (map (\x -> "{Binding{"++  show x ++ "," ++ x ++ "}}"  )) showSignature2(params)) ++ "){\n}"
+ ++  intercalate (",\n") (fmap (map (\x -> "{Binding{"++  show x ++ "," ++ x ++ "}}"  )) showSignature2(params)) ++ ")\n\n"
  ++ "Void" ++ id ++ "Kernel::generatePabloMethod(){\n"
  ++ "PabloBuilder main(getEntryScope());\n"
+ ++ intercalate ("\n") (fmap (map (\x -> "std::vector <PabloAST*>" ++ x ++ "= " ++ "getInputStreamSet("++show x ++");"  )) showSignature2Input(params))++"\n"
+ ++ intercalate ("\n") (fmap (map (\x -> "PabloAST * " ++ x ++ "= " ++ "getInputStreamSet("++show x ++");"  )) showSignature2Output(params))++"\n"
  ++ printStatements(more , "main")
- ++ intercalate (",") (filter (/= "")(fmap (map (\x -> x)) extractSignatureInput(params))) ++","  -- input numbers
+ ++ intercalate (",") (filter (/= "")(fmap (map (\x -> "for (unsigned i = 0; i < " ++ x  ++ "; i++ ) {\n" ++ "pb.createAssign(pb.createExtract(getOutpuStreamVar(" ++intercalate (",") (fmap (map (\x -> show x )) showSignature2Output(params))++ ")))")) extractSignatureInput(params)))   -- input numbers
  ++ intercalate (",") (filter (/= "")(fmap (map (\x -> x)) extractSignatureOutput(params))) -- Onput numbers
  -- ++ "for (unsigned i = 0 ; i < " ++ getfirstnum(showSignature2(params))
  -- ++ ";i++) {\n pb.createAssign(pb.createExtract(getOutputStreamVar(" ++ show ("u" ++ show getfirstnum(showSignature2(params)) ++ "bits),")
  -- ++ "pb.getInteger(i)), " ++ "u" ++ show getfirstnum(showSignature2(params)) ++ "bits[" ++ show  getfirstnum(showSignature2(params)) ++ ");\n}"
- -- ++"}"
+ ++"}"
 
 makeEX ((Pabint x),scope) = scope++"."++"getInteger("++ show x++ "),"
 makeEX ((Variable a), scope) = a
