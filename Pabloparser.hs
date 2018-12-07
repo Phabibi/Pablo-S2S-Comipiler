@@ -189,7 +189,7 @@ parsePabloIfStatement tokens =
 -- <STREAM_TYPE> ::= "<" <INTEGER-TYPE> ">"
 -- <STREAM_SET-TYPE> ::= <STREAM_TYPE> "[" <INTEGER> "]"
 
-data PabloType = IntType INT | StreaMtype PabloType | StreaMSet PabloType PabloExpression deriving Show
+data PabloType = IntType Int | StreaMtype PabloType | StreaMSet PabloType PabloExpression deriving Show
 
 parsePabloType (LangleB:more) = parsePabloStreaMtype (more)
 parsePabloType (I n: more) = parseIntType (I n : more)
@@ -254,6 +254,7 @@ spechelper p s args more =
     _ -> Nothing
 
 paramIdent (Variable s) = s
+showpab (Pabint x) = show x
 
 -- Finally...
 
@@ -269,17 +270,18 @@ showparamList (ParamL pspec [moreps]) = showparamSpec(pspec) ++ showparamSpec(mo
 showSignature2 (Signature2 p1 p2) = showparamList(p1) ++ showparamList(p2)
 showSignature2 (Signature1 param1) = showparamList(param1)
 
-getfirstnum (input:output:rest)  = (getint 0 output)
-getfirst (input:output) = input
-getsecond (input:output:rest) = output
-getsecondAST (kid:input:(output)) = "PabloAST* u" ++ show (getint 0 input) ++ "bits[" ++ show  (getint 0 input) ++ "];\n"
-getrestASt (kid:input:(output)) = intercalate (";\n") (map (\x -> "PabloAST*  "++  x  )  output )
 
+extractparamtype (IntType a) = []
+extractparamspec (ParamSpec (IntType a) _ ) = []   -- we dont need these yet
+extractparamspec (ParamSpec (StreaMtype a) _ ) = extractparamtype(a)
 
-getint accum [] = accum
-getint accum (c:more)
-   | isDigit c  = getint (accum * 10 + (digitToInt c)) more
-   | otherwise  = getint accum more
+extractparamspec (ParamSpec (StreaMSet _ b) _) = showpab(b)
+
+extractparamlist (ParamL a []) = extractparamspec (a) : []
+extractparamlist (ParamL a (s:rest))= [extractparamspec (a)] ++ extractparamlist(ParamL s  rest)
+
+extractSignatureInput (Signature2 p1 _) = extractparamlist(p1)
+extractSignatureOutput (Signature2 _ p2) = extractparamlist(p2)
 
 showKernelHeader(PKernel id params more)  =
  "class " ++ (id) ++ "Kernel final: public pablo::PabloKernel {\n"
@@ -291,36 +293,30 @@ showKernelHeader(PKernel id params more)  =
  ++ " void generatePabloMethod() override;\n"
  ++ "};\n"
  ++ (id)++"Kernel::"++(id)++"Kernel(const std::unique_ptr<kernel::KernelBuilder> & b ,"
- ++ intercalate (",") (fmap (map (\x -> "StreamSet*  "++  x  )) showSignature2(params)) ++ "):PabloKernel(b,"++ (id) ++ ",\n"
+
  ++  intercalate (",\n") (fmap (map (\x -> "{Binding{"++  show x ++ "," ++ x ++ "}}"  )) showSignature2(params)) ++ "){\n}"
  ++ "Void" ++ id ++ "Kernel::generatePabloMethod(){\n"
  ++ "PabloBuilder main(getEntryScope());\n"
- ++ "std::vector <PabloAST *>" ++  getfirst(showSignature2(params)) ++ " = getinputStreamSet(" ++ show  (getfirst(showSignature2(params))) ++");\n\n"
- ++ getsecondAST(showSignature2(params)) ++ getrestASt(showSignature2(params))
- ++ "TranslateBlock("++printStatements(more , "main") ++ ",main)\n"
+ ++ printStatements(more , "main")
+ ++ intercalate (",") (filter (/= "")(fmap (map (\x -> x)) extractSignatureInput(params))) ++","  -- input numbers
+ ++ intercalate (",") (filter (/= "")(fmap (map (\x -> x)) extractSignatureOutput(params))) -- Onput numbers
  -- ++ "for (unsigned i = 0 ; i < " ++ getfirstnum(showSignature2(params))
  -- ++ ";i++) {\n pb.createAssign(pb.createExtract(getOutputStreamVar(" ++ show ("u" ++ show getfirstnum(showSignature2(params)) ++ "bits),")
  -- ++ "pb.getInteger(i)), " ++ "u" ++ show getfirstnum(showSignature2(params)) ++ "bits[" ++ show  getfirstnum(showSignature2(params)) ++ ");\n}"
  -- ++"}"
--- printStatements :: ([PabloStatement],[Char]) -> [Char]
--- getexp (Variable a) = a
--- getexp (Pabint x) =  show x
--- getexp (Not x) = getexp x
--- getexp (Or a b) = getexp a
 
-
-makeEx ((Pabint x),scope) = scope++"."++"getInteger("++ show x++ "),"
+makeEX ((Pabint x),scope) = scope++"."++"getInteger("++ show x++ "),"
 makeEX ((Variable a), scope) = a
 makeEX ((ElementAt x y),scope) = x ++ scope++"."++"createExtract("++show x++","++show y++")"
 makeEX ((Not x),scope )= scope++"."++"createNot("++makeEX (x , scope) ++ ") "
 makeEX ((And x y),scope) = scope++"."++"createAnd("++makeEX (x , scope) ++ "," ++ makeEX (y , scope) ++ ")"
 makeEX ((Or x y),scope) = scope++"."++"createOr("++ makeEX(x , scope) ++ ","++ makeEX(y,scope) ++")"
 makeEX ((Xor x y),scope) = scope++"."++"createXor("++makeEX(x, scope) ++ "," ++ makeEX(y , scope )++")"
+makeEX ((Literal d), scope) = scope++"."++"createRepeat("++  showpab(d) ++ ")"
+-- makeEX ((FuncCall x y),scope )= scope++"."++"createFunctionCall("++ x ++ "," makeEX(y, scope) ++  ") "
 
 -- not sure what todo for these
--- makeEX ((FuncCall x y),scope )= scope++"."++"createFunctionCall("++makeEX (x , scope) ++ "," makeEX(y, scope) ++  ") "
 -- makeEX (Group x) scope = x
--- makeEX ((Literal d))
 printStatements ([], currentScope) = []
 printStatements((If expr nestedBlock):more,  currentScope) =
   "{\n" ++       -- open C++ scope
@@ -329,7 +325,8 @@ printStatements((If expr nestedBlock):more,  currentScope) =
   printStatements(nestedBlock, newScope) ++
   "}\n" ++     -- close C++ scop
   printStatements (more, currentScope)
-  where newScope = "newScope" ++ (show (length nestedBlock))
+  where newScope = currentScope ++ "_" ++(show 0 )
+
 
 printStatements((While expr nestedBlock):more,  currentScope) =
   "{\n" ++       -- open C++ scope
@@ -338,19 +335,17 @@ printStatements((While expr nestedBlock):more,  currentScope) =
   printStatements(nestedBlock,  currentScope) ++
   "}\n" ++     -- close C++ scop
   printStatements (more, currentScope)
-  where newScope = "newScope" ++ ( show  (length  nestedBlock ))
+  where newScope =  currentScope ++"_" ++( show 0)
 
-printStatements ((Equality (Variable a) b):more, currentScope) =
+printStatements ((Equality  (Variable a ) b):more, currentScope) =
   "{\n" ++       -- open C++ scope
   "auto " ++ a ++ " = " ++  currentScope ++ ".createVar(" ++ show a ++ ");\n"++
   currentScope ++ ".createAssign( "
   ++ a
-  ++ "," ++ makeEX(b , currentScope)
+  ++ ","  ++ makeEX(b , currentScope)
   ++ ");\n}\n"      -- close C++ scopprintStatements (more, currentScope)
   ++ printStatements (more, currentScope)
-  -- where newScope = "newScope" ++ (show (length more ))
-
-
+  where newScope =  currentScope  ++ "_" ++  (show (length more ))
 
 
 
