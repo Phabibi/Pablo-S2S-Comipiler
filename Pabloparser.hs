@@ -263,6 +263,9 @@ parsePab srctxt =
     Just (e,[]) -> Just e
     _ -> Nothing
  --
+
+ --NOTE : trying to extract names:
+ 
 showparamSpec (ParamSpec _ id) =  [id]
 showparamSpec (ParamSpecL _ id ids) = [id]++ ids
 showparamList (ParamL pspec []) = showparamSpec(pspec)
@@ -280,9 +283,14 @@ extractparamlist (ParamL a []) = extractparamspec (a) : []
 extractparamlist (ParamL a (s:rest))= [extractparamspec (a)] ++ extractparamlist(ParamL s  rest)
 extractSignatureInput (Signature2 p1 _) = extractparamlist(p1)
 extractSignatureOutput (Signature2 _ p2) = extractparamlist(p2)
+-- intercalate (",") (filter (/= "") (fmap (map (\x -> "for (unsigned i = 0; i < " ++ x  ++ "; i++ ) {\n" ++ "pb.createAssign(pb.createExtract(getOutpuStreamVar(" ))
+zipNamesOut params = filterNamesIn(zip (extractSignatureOutput(params)  showSignature2Output(params))) --error here
+zipNamesIn  params = filterNamesIn (zip (extractSignatureInput(params)  showSignature2Input(params))) --error here
+
+filterNamesIn arr = filter ((=="").fst) arr
 
 
-
+ {----------------------}
 showKernelHeader(PKernel id params more)  =
  "class " ++ (id) ++ "Kernel final: public pablo::PabloKernel {\n"
  ++ "public:\n" ++"    " ++ (id) ++
@@ -299,8 +307,7 @@ showKernelHeader(PKernel id params more)  =
  ++ "PabloBuilder main(getEntryScope());\n"
  ++ intercalate ("\n") (fmap (map (\x -> "std::vector <PabloAST*>" ++ x ++ "= " ++ "getInputStreamSet("++show x ++");"  )) showSignature2Input(params))++"\n"
  ++ intercalate ("\n") (fmap (map (\x -> "PabloAST * " ++ x ++ "= " ++ "getInputStreamSet("++show x ++");"  )) showSignature2Output(params))++"\n"
- ++ printStatements(more , "main")
- ++ intercalate (",") (filter (/= "")(fmap (map (\x -> "for (unsigned i = 0; i < " ++ x  ++ "; i++ ) {\n" ++ "pb.createAssign(pb.createExtract(getOutpuStreamVar(" ++intercalate (",") (fmap (map (\x -> show x )) showSignature2Output(params))++ ")))")) extractSignatureInput(params)))   -- input numbers
+ ++ printStatements(more , "main")   -- input numbers
  ++ intercalate (",") (filter (/= "")(fmap (map (\x -> x)) extractSignatureOutput(params))) -- Onput numbers
  -- ++ "for (unsigned i = 0 ; i < " ++ getfirstnum(showSignature2(params))
  -- ++ ";i++) {\n pb.createAssign(pb.createExtract(getOutputStreamVar(" ++ show ("u" ++ show getfirstnum(showSignature2(params)) ++ "bits),")
