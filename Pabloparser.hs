@@ -265,11 +265,11 @@ parsePab srctxt =
  --
 
  --NOTE : trying to extract names:
- 
+
 showparamSpec (ParamSpec _ id) =  [id]
 showparamSpec (ParamSpecL _ id ids) = [id]++ ids
 showparamList (ParamL pspec []) = showparamSpec(pspec)
-showparamList (ParamL pspec [moreps]) = showparamSpec(pspec) ++ showparamSpec(moreps)
+showparamList (ParamL pspec (c:moreps)) = showparamSpec(pspec) ++ showparamList(ParamL c moreps)
 showSignature2Input (Signature2 p1 _) = showparamList(p1)
 showSignature2Output (Signature2 _ p2) = showparamList(p2)
 showSignature2 (Signature2 p1 p2) = showparamList(p1) ++  showparamList(p2)
@@ -284,10 +284,8 @@ extractparamlist (ParamL a (s:rest))= [extractparamspec (a)] ++ extractparamlist
 extractSignatureInput (Signature2 p1 _) = extractparamlist(p1)
 extractSignatureOutput (Signature2 _ p2) = extractparamlist(p2)
 -- intercalate (",") (filter (/= "") (fmap (map (\x -> "for (unsigned i = 0; i < " ++ x  ++ "; i++ ) {\n" ++ "pb.createAssign(pb.createExtract(getOutpuStreamVar(" ))
-zipNamesOut params = filterNamesIn(zip (extractSignatureOutput(params)  showSignature2Output(params))) --error here
-zipNamesIn  params = filterNamesIn (zip (extractSignatureInput(params)  showSignature2Input(params))) --error here
-
-filterNamesIn arr = filter ((=="").fst) arr
+-- zipNamesOut params = filterNamesIn(zip (extractSignatureOutput(params)  showSignature2Output(params))) --error here
+-- zipNamesIn  params = filterNamesIn (zip (extractSignatureInput(params)  showSignature2Input(params))) --error here
 
 
  {----------------------}
@@ -306,12 +304,14 @@ showKernelHeader(PKernel id params more)  =
  ++ "Void" ++ id ++ "Kernel::generatePabloMethod(){\n"
  ++ "PabloBuilder main(getEntryScope());\n"
  ++ intercalate ("\n") (fmap (map (\x -> "std::vector <PabloAST*>" ++ x ++ "= " ++ "getInputStreamSet("++show x ++");"  )) showSignature2Input(params))++"\n"
- ++ intercalate ("\n") (fmap (map (\x -> "PabloAST * " ++ x ++ "= " ++ "getInputStreamSet("++show x ++");"  )) showSignature2Output(params))++"\n"
+ ++ intercalate ("\n")  (fmap (map (\x -> "PabloAST * " ++ x ++ "= " ++ "getInputStreamSet("++show x ++");"  ))  showSignature2Output(params))++"\n"
  ++ printStatements(more , "main")   -- input numbers
- ++ intercalate (",") (filter (/= "")(fmap (map (\x -> x)) extractSignatureOutput(params))) -- Onput numbers
- -- ++ "for (unsigned i = 0 ; i < " ++ getfirstnum(showSignature2(params))
- -- ++ ";i++) {\n pb.createAssign(pb.createExtract(getOutputStreamVar(" ++ show ("u" ++ show getfirstnum(showSignature2(params)) ++ "bits),")
- -- ++ "pb.getInteger(i)), " ++ "u" ++ show getfirstnum(showSignature2(params)) ++ "bits[" ++ show  getfirstnum(showSignature2(params)) ++ ");\n}"
+ ++ "for (unsigned i = 0 ; i < "
+ ++  intercalate (",") (filter (/= "")(fmap (map (\x -> x)) init (extractSignatureOutput(params))))
+ ++ ";i++) {\n pb.createAssign(pb.createExtract(getOutputStreamVar("
+ ++ "pb.getInteger(i)), "++ "["++intercalate (",") (filter (/= "")(fmap (map (\x -> x)) init(extractSignatureOutput(params)))) ++ "]);\n}\n"
+ ++ intercalate ("\n") (fmap (map (\x -> "pb.createAssign(pb.createExtract(getOutputStreamVar(" ++ show x ++ ")," ++ "pb.getInteger(0)),"++ x)) tail (showSignature2Output(params)))
+
  ++"}"
 
 makeEX ((Pabint x),scope) = scope++"."++"getInteger("++ show x++ "),"
