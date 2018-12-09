@@ -289,6 +289,10 @@ extractSignatureOutput (Signature2 _ p2) = extractparamlist(p2)
 
 
  {----------------------}
+
+
+ -- This is a mess .. but it works ..
+
 showKernelHeader(PKernel id params more)  =
  "class " ++ (id) ++ "Kernel final: public pablo::PabloKernel {\n"
  ++ "public:\n" ++"    " ++ (id) ++
@@ -304,14 +308,14 @@ showKernelHeader(PKernel id params more)  =
  ++ "Void" ++ id ++ "Kernel::generatePabloMethod(){\n"
  ++ "PabloBuilder main(getEntryScope());\n"
  ++ intercalate ("\n") (fmap (map (\x -> "std::vector <PabloAST*>" ++ x ++ "= " ++ "getInputStreamSet("++show x ++");"  )) showSignature2Input(params))++"\n"
- ++ intercalate ("\n")  (fmap (map (\x -> "PabloAST * " ++ x ++ "= " ++ "getInputStreamSet("++show x ++");"  ))  showSignature2Output(params))++"\n"
+ ++fmap (\x -> "PabloAST * " ++ x ) head (showSignature2Output(params)) ++ "["++intercalate ("") (filter (/= "")(fmap (map (\x -> x)) head[(extractSignatureOutput(params))])) ++ "]" ++ ";\n"
+ ++ intercalate ("\n")  (fmap (map (\x -> "PabloAST * " ++ x   ))  tail (showSignature2Output(params)))++"\n"
  ++ printStatements(more , "main")   -- input numbers
  ++ "for (unsigned i = 0 ; i < "
- ++  intercalate (",") (filter (/= "")(fmap (map (\x -> x)) init (extractSignatureOutput(params))))
- ++ ";i++) {\n pb.createAssign(pb.createExtract(getOutputStreamVar("
- ++ "pb.getInteger(i)), "++ "["++intercalate (",") (filter (/= "")(fmap (map (\x -> x)) init(extractSignatureOutput(params)))) ++ "]);\n}\n"
+ ++  intercalate (",") (filter (/= "")(fmap (map (\x -> x)) extractSignatureOutput(params)))
+ ++ ";i++) {\n pb.createAssign(pb.createExtract(getOutputStreamVar("++ (fmap (\x ->show x ) head (showSignature2Output(params)))++")"
+ ++ "pb.getInteger(i)), "++ "["++intercalate (",") (filter (/= "")(fmap (map (\x -> x)) head[(extractSignatureOutput(params))])) ++ "]);\n}\n"
  ++ intercalate ("\n") (fmap (map (\x -> "pb.createAssign(pb.createExtract(getOutputStreamVar(" ++ show x ++ ")," ++ "pb.getInteger(0)),"++ x)) tail (showSignature2Output(params)))
-
  ++"}"
 
 makeEX ((Pabint x),scope) = scope++"."++"getInteger("++ show x++ "),"
@@ -334,7 +338,7 @@ printStatements((If expr nestedBlock):more,  currentScope) =
   printStatements(nestedBlock, newScope) ++
   "}\n" ++     -- close C++ scop
   printStatements (more, currentScope)
-  where newScope = currentScope ++ "_" ++(show 0 )
+  where newScope = currentScope ++ "_" ++(show $ length more )
 
 
 printStatements((While expr nestedBlock):more,  currentScope) =
@@ -344,7 +348,7 @@ printStatements((While expr nestedBlock):more,  currentScope) =
   printStatements(nestedBlock,  currentScope) ++
   "}\n" ++     -- close C++ scop
   printStatements (more, currentScope)
-  where newScope =  currentScope ++"_" ++( show 0)
+  where newScope =  currentScope ++"_" ++( show $ length more)
 
 printStatements ((Equality  (Variable a ) b):more, currentScope) =
   "{\n" ++       -- open C++ scope
