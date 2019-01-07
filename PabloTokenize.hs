@@ -36,7 +36,7 @@ tokenize ('i':(c:more))
 tokenize t@(c:more)
    | isDigit c = getNumToken (digitToInt c) more
    | isAlpha c = getAlphaNum [c] (span isAlphaNum more)
-   | otherwise = getSpecial (span (\c -> elem c "+-*/<>=&|!@#$%?:") t)
+   | otherwise = getSpecial (span (\c -> elem c "+-*/<>=&|!@#$%?:_") t)
 
 
 getSpecial ("", (c : more)) = BadToken c : (tokenize more)

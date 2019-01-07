@@ -248,7 +248,7 @@ parsePabloParamSpec tokens =
     Just (p , Special s:more) -> Just (ParamSpec p s, more)
     _-> Nothing
 spechelper p s args more =
-  case parsePrim more of
+  case parsePabloEXP more of
     Just (e ,(Com:yet_more)) -> spechelper p s (args++[paramIdent(e)]) yet_more
     Just (e , (Rparen: yet_more)) -> Just(ParamSpecL p s (args++[paramIdent(e)]) , yet_more)
     _ -> Nothing
@@ -318,7 +318,7 @@ showKernelHeader(PKernel id params more)  =
  ++ intercalate ("\n") (fmap (map (\x -> "pb.createAssign(pb.createExtract(getOutputStreamVar(" ++ show x ++ ")," ++ "pb.getInteger(0)),"++ x)) tail (showSignature2Output(params)))
  ++"}"
 
-makeEX ((Pabint x),scope) = scope++"."++"getInteger("++ show x++ "),"
+makeEX ((Pabint x),scope) = scope++"."++"getInteger("++ show x++ ")"
 makeEX ((Variable a), scope) = a
 makeEX ((ElementAt x y),scope) = x ++ scope++"."++"createExtract("++show x++","++show y++")"
 makeEX ((Not x),scope )= scope++"."++"createNot("++makeEX (x , scope) ++ ") "
@@ -326,7 +326,12 @@ makeEX ((And x y),scope) = scope++"."++"createAnd("++makeEX (x , scope) ++ "," +
 makeEX ((Or x y),scope) = scope++"."++"createOr("++ makeEX(x , scope) ++ ","++ makeEX(y,scope) ++")"
 makeEX ((Xor x y),scope) = scope++"."++"createXor("++makeEX(x, scope) ++ "," ++ makeEX(y , scope )++")"
 makeEX ((Literal d), scope) = scope++"."++"createRepeat("++  showpab(d) ++ ")"
--- makeEX ((FuncCall x y),scope )= scope++"."++"createFunctionCall("++ x ++ "," makeEX(y, scope) ++  ") "
+makeEX ((FuncCall x y) , scope)= scope ++ "." ++ "create" ++x ++ "(" ++ init(makeEXarr(y, scope)) ++  ")"
+
+--simple recurssion over the array of expression
+
+makeEXarr ([], scope) = []
+makeEXarr ((f:r),scope) =  makeEX(f , scope) ++","++ makeEXarr(r ,  scope)
 
 -- not sure what todo for these
 -- makeEX (Group x) scope = x
