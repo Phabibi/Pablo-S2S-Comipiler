@@ -1,2 +1,2 @@
 # Pablo S2S Compiler
-A Parser for the Prabaixs Pablo language 
+An S2S Compiler for the Prabaixs Pablo language 
