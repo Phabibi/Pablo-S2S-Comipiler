@@ -14,9 +14,9 @@ The transcompiler takes a Pablo code, then translates it into Haskell representa
   
 # How to use 
   - run the repl ``` $ ghci ```
-  - ``` showHead <Pablo Code> 
+  - ``` showHead <Pablo Code> ```
 # Exammple 
-```showHead   "kernel u8u16 :: <i1>[8] u8basi -> <i1>[18] selection
+``  `showHead "kernel u8u16 :: <i1>[8] u8basi -> <i1>[18] selection
  {nonFinal = ~u8final
    Initial = InFile(~Advance(nonFinal, 1))
    ASCII = u8final & Initial
