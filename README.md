@@ -1,14 +1,16 @@
 # Pablo S2S Compiler
-An S2S Compiler for the Prabaixs Pablo language 
+-An S2S Compiler for the Prabaixs Pablo language 
 
-Implemented an S2S Compiler for the Parabix technology using haskell and C++ . Parabix is a high-performance programming framework for streaming text processing applications, leveraging both SIMD and multicore parallel processing features.
+-Implemented an S2S Compiler for the Parabix technology using haskell and C++ . Parabix is a high-performance programming framework for streaming text processing applications, leveraging both SIMD and multicore parallel processing features.
 
-Pablo is a Python subset language that allows you to prototype parallel bit stream programs in Python based on the concept of unbounded (arbitrary-length) bit streams.
+-Pablo is a Python subset language that allows you to prototype parallel bit stream programs in Python based on the concept of unbounded (arbitrary-length) bit streams.
 
-Since Pablo uses C++ to be compiled/executed , as a research project for my functional programming course , I was given the task to implement a solution in order to skip the need of having to translating the Pablo code into C++ by hand.
+-Since Pablo uses C++ to be compiled/executed , as a research project for my functional programming course , I was given the task to implement a solution in order to skip the need of having to translating the Pablo code into C++ by hand.
 
-The transcompiler takes a Pablo code, then translates it into Haskell representation using recursive descent parsing and finally produces the C++ equivalent code that is used by the Parabix compiler
+-The transcompiler takes a Pablo code, then translates it into Haskell representation using recursive descent parsing and finally produces the C++ equivalent code that is used by the Parabix compiler
 
+# Pablo Language
+  - 
 # Requirments
   - download haskell ```https://www.haskell.org/downloads/```
   
